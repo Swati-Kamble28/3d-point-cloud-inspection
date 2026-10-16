@@ -1,176 +1,208 @@
-# 3D Point Cloud Registration and Dimensional Inspection
+# 3D Point Cloud Registration and Inspection
 
-A Python portfolio project for learning 3D registration and visual inspection. Align a scanned object to a reference, visualize unsigned deviations, and evaluate alignment against a known synthetic transformation.
+A Python project that aligns a simulated 3D scan with a reference object, visualizes geometric deviations, and evaluates registration accuracy using a known transformation.
 
-**This repository is an educational prototype, not a ZEISS product or a certified metrology system.** All included results are synthetic experiments; no claim of real industrial deployment is made.
+Built to explore 3D computer vision, geometric inspection, and reproducible evaluation.
 
-## Why this project
+![Open3D registration and deviation heatmap](results/open3d_voxel15/inspection.png)
 
-Relevant to 3D computer vision internships involving geometric perception, visual inspection, and dimensional measurement. The implementation covers preprocessing, registration, reproducible experiments, metrics, and result visualization. It does not implement a learned classifier or ROS2 integration.
+## Features
 
-## Quick start (Windows PowerShell)
+- Synthetic reference and scan generation with noise, outliers, and an optional dent
+- Voxel downsampling and statistical outlier filtering
+- Two registration pipelines:
+  - NumPy/SciPy: PCA initialization and trimmed point-to-point ICP
+  - Open3D: FPFH features, RANSAC, and point-to-plane ICP
+- Unsigned nearest-neighbour deviation heatmaps
+- Registration and distance metrics exported as JSON
+- Automated tests for core registration behaviour
 
-Use Python 3.11 or 3.12. Extract this folder and open a terminal inside it.
+## Technologies
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
+Python, NumPy, SciPy, Open3D, Matplotlib, unittest
+
+## How It Works
+
+1. Generate an asymmetric reference object.
+2. Create a simulated scan with a known rotation and translation.
+3. Add noise, outliers, and optionally a localized dent.
+4. Downsample and filter both point clouds.
+5. Estimate the scan-to-reference transformation.
+6. Measure nearest-neighbour distances after alignment.
+7. Save plots, point clouds, transformations, and evaluation metrics.
+
+Synthetic coordinates use millimetres.
+
+## Setup
+
+The NumPy pipeline was run successfully on Windows with Python 3.13.
+The Open3D experiments used the updated dependency requirement
+`open3d==0.20.0`.
+
+### Windows Command Prompt
+
+```cmd
+py -3.13 -m venv .venv
+.venv\Scripts\activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m inspection
-python -m unittest discover -s tests -v
 ```
 
-If PowerShell blocks activation, use the virtual environment interpreter directly:
+For the Open3D backend:
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m inspection
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-```
-
-## Quick start (Linux / macOS)
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m inspection
-python -m unittest discover -s tests -v
-```
-
-The default backend needs only NumPy, SciPy, and Matplotlib. No GPU or external dataset is required. Charts are saved as PNGs; no interactive desktop window opens.
-
-## Pipeline
-
-1. Generate an asymmetric reference shape in millimetres.
-2. Add a localized inward dent, Gaussian noise, a known rigid transformation, and 1% extra outlier points.
-3. Remove invalid points, voxel-downsample, and filter statistical outliers.
-4. Estimate a scan-to-reference rigid transform using one of the backends below.
-5. Calculate unsigned nearest-neighbour distances from the aligned, cleaned scan to the cleaned reference.
-6. Export heatmaps, a histogram, per-point distances, a 4 x 4 transformation, and JSON metrics.
-7. For synthetic inputs, compare the estimated transform to the exact inverse of the applied pose.
-
-### Backends
-
-| Backend | Initial alignment | Refinement | Status |
-| --- | --- | --- | --- |
-| `numpy` (default) | PCA principal axes with proper-rotation sign hypotheses | Trimmed point-to-point ICP using SVD | Executed in the supplied demo and tests |
-| `open3d` | FPFH features and RANSAC | Point-to-plane ICP using estimated normals | See VALIDATION.md for execution status |
-
-PCA is a practical baseline for asymmetric objects with substantial overlap. It is not a replacement for feature matching on arbitrary objects. Eigenvalue ambiguity, symmetry, partial overlap, and outliers can cause failure.
-
-### Optional Open3D backend
-
-```bash
+```cmd
 python -m pip install -r requirements-open3d.txt
-python -m inspection --backend open3d --output results/open3d
 ```
 
-Normals use a radius of 3 times the voxel size; FPFH uses 6 times the voxel size. RANSAC uses a 2.5-voxel correspondence threshold, mutual feature matching, and edge-length/distance checkers. ICP uses `--threshold`. Adjust these for input density and object scale. Open3D wheels depend on your Python/platform; use Python 3.11/3.12 when possible. Feature matching is stochastic and may fail even on geometrically similar inputs; inspect the output rather than trusting a single score.
+Ensure `requirements-open3d.txt` contains:
 
-## Experiments
-
-### Dent versus no dent
-
-```bash
-python -m inspection --seed 42 --output results/dent
-python -m inspection --seed 42 --no-defect --output results/no_defect
+```text
+-r requirements.txt
+open3d==0.20.0
 ```
 
-Compare the distance distributions and fraction above threshold. A threshold crossing is a candidate anomaly, not proof of a manufacturing defect. Residual outliers, sampling differences, noise, and misalignment also raise distances.
+## Run the Project
 
-### Reproducibility and density
+### NumPy baseline
 
-```bash
-python -m inspection --seed 7 --points 10000 --output results/seed7
-python -m inspection --voxel 1.0 --threshold 2.0 --tolerance 0.75 --output results/coarser
+```cmd
+python -m inspection
 ```
 
-The seed controls synthetic data and Open3D random sampling, but bitwise-identical Open3D results across platforms/threads are not guaranteed.
+### Open3D registration
 
-### Your own scans
+The 1.5 mm voxel setting recovered the correct pose in the recorded experiment:
 
-CSV files must contain exactly three numeric columns, no header: x, y, z. NPY files must be N x 3 numeric arrays. PLY/PCD inputs require Open3D even if you use the NumPy registration backend.
+```cmd
+python -m inspection --backend open3d --voxel 1.5 --threshold 2 --output results/open3d_voxel15
+```
 
-```bash
+### No-dent comparison
+
+```cmd
+python -m inspection --backend open3d --voxel 1.5 --threshold 2 --no-defect --output results/open3d_voxel15_no_defect
+```
+
+### Run tests
+
+```cmd
+python -m unittest discover -s tests -v
+```
+
+Four automated tests cover known-transform recovery, invalid input,
+zero overlap, and synthetic registration with defect contrast.
+They test the NumPy baseline and shared functions, not the Open3D backend.
+
+## Experimental Results
+
+Recorded on synthetic data with seed 42 and 7,000 reference samples.
+
+| Configuration | Rotation error (°) | Translation error (mm) | Inlier RMSE (mm) | Points above 0.75 mm |
+|---|---:|---:|---:|---:|
+| NumPy, dent, voxel 0.7 mm | 0.0054 | 0.0023 | 0.2871 | 2.89% |
+| Open3D, dent, voxel 0.7 mm | 179.9864 | 35.9832 | 0.8028 | 43.25% |
+| Open3D, dent, voxel 1.5 mm | 0.0556 | 0.0405 | 0.4898 | 16.35% |
+| Open3D, no dent, voxel 1.5 mm | 0.0158 | 0.0076 | 0.4744 | 15.37% |
+
+### Findings
+
+- The NumPy baseline recovered the known pose closely in this controlled example.
+- Open3D at 0.7 mm voxel size converged to an approximately 180° incorrect orientation despite high registration fitness.
+- The object's approximate symmetry makes incorrect alignments plausible.
+- Increasing the voxel size to 1.5 mm recovered the correct orientation in the recorded Open3D run.
+- At matching Open3D settings, the dent increased the fraction above tolerance by approximately 0.98 percentage points.
+- This small difference demonstrates deviation contrast, but does not establish reliable defect detection.
+
+Changing voxel size also changes sampling density, so distance metrics across
+different voxel settings are not directly equivalent.
+
+## Understanding the Metrics
+
+- **Fitness:** Fraction of scan points within the correspondence threshold of a reference point. It is not classification accuracy.
+- **Inlier RMSE:** Root mean square nearest-neighbour distance for points inside that threshold.
+- **Mean deviation:** Average unsigned nearest-neighbour distance across all cleaned scan points.
+- **95th-percentile deviation:** Distance at or below which 95% of scan-point distances fall.
+- **Fraction above tolerance:** Proportion of scan points exceeding the selected distance threshold.
+- **Rotation and translation errors:** Differences between the estimated pose and the known synthetic ground truth.
+
+A high fitness score alone does not guarantee correct alignment.
+
+## Output Files
+
+Each run saves its outputs in the selected results folder.
+
+| File | Description |
+|---|---|
+| `inspection.png` | Before/after alignment and deviation heatmap |
+| `deviation_histogram.png` | Distribution of unsigned distances |
+| `metrics.json` | Registration and deviation metrics |
+| `scan_to_reference.csv` | Estimated 4 × 4 rigid transformation |
+| `deviations.csv` | Aligned coordinates, distances, and threshold flags |
+| `aligned_scan.npy` | Cleaned, aligned scan |
+| `reference_raw.npy` | Original reference cloud |
+| `scan_raw.npy` | Original scan cloud |
+| `ground_truth_scan_to_reference.csv` | Known synthetic transformation |
+| `synthetic_defect_mask.npy` | Defect labels before preprocessing |
+
+The synthetic defect mask indexes the original reference samples.
+It does not directly index the cleaned scan or appended outliers.
+
+## Use Your Own Data
+
+CSV inputs must contain three numeric columns without a header: X, Y, Z.
+NPY inputs must contain an N × 3 numeric array.
+
+```cmd
 python -m inspection --reference data/reference.csv --scan data/scan.csv --output results/custom
-python -m inspection --reference data/reference.ply --scan data/scan.ply --backend open3d --scale-to-mm 1000 --voxel 0.7 --threshold 2 --output results/custom_ply
 ```
 
-The second example assumes PLY coordinates are in metres; multiplying by 1000 converts them to millimetres. The program cannot infer units from coordinates. Both inputs must use the same units and represent rigidly related versions of the same object. No scale estimation is performed. Custom scans have no known pose, so ground-truth pose errors are omitted.
+PLY and PCD inputs require Open3D.
 
-## Outputs
+If input coordinates are in metres, use `--scale-to-mm 1000`.
+Both clouds must use the same units. The pipeline estimates rigid motion,
+not scale.
 
-The ZIP includes a completed run in `results/demo/`.
+## Project Structure
 
-| File | Content |
-| --- | --- |
-| `inspection.png` | Before/after overlays and unsigned deviation heatmap |
-| `deviation_histogram.png` | Distance distribution and exploratory tolerance threshold |
-| `metrics.json` | Post-registration residual and pose metrics |
-| `scan_to_reference.csv` | Homogeneous 4 x 4 transform mapping scan coordinates into the reference frame |
-| `deviations.csv` | Cleaned aligned XYZ, unsigned distance, threshold flag |
-| `aligned_scan.npy` | Cleaned transformed scan |
-| `reference_raw.npy`, `scan_raw.npy` | Input clouds before preprocessing |
-| `ground_truth_scan_to_reference.csv` | Synthetic ground-truth transform only |
-| `synthetic_defect_mask.npy` | Synthetic defect labels for the original reference sampling, before cleanup |
+```text
+3d-point-cloud-inspection/
+├── inspection/
+│   ├── __init__.py
+│   ├── __main__.py
+│   └── core.py
+├── tests/
+│   └── test_core.py
+├── results/
+├── requirements.txt
+├── requirements-open3d.txt
+├── README.md
+├── VALIDATION.md
+├── LICENSE
+└── .gitignore
+```
 
-The raw defect mask does not index the cleaned scan and excludes appended outliers. It is provided for dataset inspection, not as a ready-made segmentation evaluation label array.
+## Limitations
 
-## Metric definitions
+- Evaluation uses synthetic data, not real industrial scans.
+- Reference and scan originate from shared samples, making registration easier than independently acquired scans.
+- Approximate symmetry can cause incorrect registration.
+- Nearest-neighbour distances depend on sampling density, noise, and alignment.
+- Distances are unsigned and do not distinguish inward from outward displacement.
+- Outliers remain after filtering; maximum deviation is not equivalent to dent depth.
+- Threshold crossings are not validated defect labels or physical defective area.
+- No sensor calibration, measurement uncertainty analysis, or certified metrology validation is included.
 
-For scan point s_i and reference point set R, d_i = min over r in R of ||s_i - r||.
+## Future Improvements
 
-- **Fitness:** proportion of cleaned scan points with d_i below the correspondence threshold. This is scan-to-reference overlap, not classification accuracy.
-- **Inlier RMSE:** square root of the mean squared distances for those inliers. It is `null` if no inliers exist. Low inlier RMSE can hide excluded defects/outliers, so inspect fitness and all-point metrics too.
-- **Mean, median, 95th percentile, maximum:** computed across all cleaned scan points, including residual outliers.
-- **Fraction above tolerance:** share of points exceeding the user-selected threshold. It is not physical defective area or a precision/recall score.
-- **Symmetric mean distance:** average of scan-to-reference and reference-to-scan mean nearest-neighbour distances (unsquared).
-- **Rotation error:** angle of the relative estimated/ground-truth rotation.
-- **Translation error:** Euclidean difference between estimated and ground-truth translation vectors, in the shared reference frame.
-
-Nearest-neighbour point distances depend on sampling density. They are unsigned, cannot distinguish inward/outward displacement, and are not calibrated signed CAD-surface measurements. With partial scans the reverse distance is especially sensitive to unseen reference regions.
-
-## Implementation map
-
-- `inspection/core.py`: rigid transforms, SVD fitting, preprocessing, registration, metrics, synthetic generator.
-- `inspection/__main__.py`: CLI, input loading, plots, and file exports.
-- `tests/test_core.py`: four regression tests for exact transform recovery, invalid inputs, no-overlap behaviour, and synthetic alignment/defect contrast.
-- `requirements.txt`: lightweight dependencies.
-- `requirements-open3d.txt`: optional geometric feature registration dependency.
-- `VALIDATION.md`: recorded execution results and limitations.
-
-## Limitations and useful next steps
-
-- Synthetic scan and reference start from corresponding samples, making this easier than independent real scans. Noise, cleanup, and the dent still disturb correspondences.
-- The baseline has no robust guarantee for partial overlap or symmetric geometry. ICP is locally optimized and depends on initialization.
-- Statistical filtering leaves some outliers and can remove real defects. Try several parameters and show failure cases.
-- Registration uses the potentially defective surface; deformation can bias alignment. A later improvement is robust registration on known stable regions.
-- The demo evaluates distance contrast, not defect segmentation accuracy. Add independent scans and reliable point labels before reporting precision/recall.
-- There is no sensor calibration, uncertainty budget, traceable reference, CAD fitting, or real industrial validation.
-- Next: independent mesh resampling, missing-view experiments, point-to-mesh signed distances on watertight references, robust ICP, parameter sweeps, and real scan validation.
-
-## Interview talking points
-
-Explain the difference between global registration and ICP, why ICP needs an initial pose, why normals are needed for point-to-plane ICP, how voxel size trades detail for runtime, why symmetry creates ambiguity, and why distance thresholds are not measurement accuracy.
-
-## Resume wording after you have run and understood the project
-
-**3D Point Cloud Registration and Inspection | Python, Open3D, NumPy**
-
-- Implemented point-cloud preprocessing and rigid registration, including a PCA/ICP baseline and an optional FPFH/RANSAC and point-to-plane ICP pipeline.
-- Visualized unsigned geometric deviations using 3D heatmaps and reported alignment, overlap, and distance metrics.
-- Validated the baseline with controlled synthetic transformations, noise, outliers, and a localized surface deformation.
-
-Only list Open3D as hands-on experience after installing and running that backend yourself. Do not claim industrial accuracy, real scanned-data validation, or a production deployment from this synthetic demonstration.
+- Evaluate independently sampled surfaces and real scans.
+- Test partial overlap and missing views.
+- Add more distinctive geometry to study registration ambiguity.
+- Separate coarse registration from dense-cloud inspection.
+- Compare multiple seeds and parameter settings.
+- Evaluate defect precision and recall using labels mapped to inspected points.
 
 ## References
 
-- Open3D global registration: https://www.open3d.org/docs/release/tutorial/pipelines/global_registration.html
-- Open3D ICP: https://www.open3d.org/docs/release/tutorial/pipelines/icp_registration.html
-- SciPy cKDTree: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.html
-
-## License
-
-MIT; see LICENSE. You can modify and publish this project. Review the code and reproduce the results before using it in an application or interview.
+- [Open3D Global Registration](https://www.open3d.org/docs/release/tutorial/pipelines/global_registration.html)
+- [Open3D ICP Registration](https://www.open3d.org/docs/release/tutorial/pipelines/icp_registration.html)
+- [SciPy cKDTree](https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.html)
